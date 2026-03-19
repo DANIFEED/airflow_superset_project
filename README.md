@@ -300,4 +300,67 @@ Exited
 Новые CSV-файлы должны загружаться в папку `new_data/` внутри bucket.
 
 
+# 12. Apache Airflow
+Архитектура
+    • Оркестрация: Apache Airflow 2.7.0 (в Docker).
+    • Хранилище данных: PostgreSQL 15.
+    • Источник: AWS S3 Bucket (регион ca-central-1).
+    • Визуализация: Apache Superset.
 
+### Быстрый старт
+12.1. Подготовка инфраструктуры
+Если после запуска docker compose контейнеры не поднялись или возникли ошибки доступа к папкам, выполните создание каталогов и назначьте полные права:
+Bash
+##### Создание необходимых директорий
+mkdir -p dags logs plugins data scripts
+
+##### Назначение прав доступа (рекурсивно)
+sudo chmod -R 777 dags logs plugins data scripts
+
+12.2. Настройка безопасности (Fernet Key)
+Для шифрования паролей в базе данных Airflow необходимо сгенерировать ключ и прописать его в файл .env:
+Bash
+##### Генерация ключа
+python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+Скопируйте полученную строку и добавьте в .env: AIRFLOW__CORE__FERNET_KEY=ваш_ключ
+
+12.3. Инициализация базы данных и Airflow
+Выполните последовательно команды для создания БД и применения миграций Airflow:
+Bash
+##### Создание базы данных внутри контейнера Postgres
+docker exec -it bank_postgres psql -U admin -c "CREATE DATABASE airflow_db;"
+
+##### Инициализация структуры таблиц Airflow
+docker exec -it bank_airflow_webserver airflow db init
+
+12.4. Создание администратора Airflow
+Создайте пользователя для входа в веб-интерфейс:
+Bash
+docker exec -it bank_airflow_webserver airflow users create \
+    --username bank_admin \
+    --firstname Stars25 \
+    --lastname Engineer \
+    --role Admin \
+    --email admin@example.com \
+    --password StrongPass123!
+
+### Настройка подключений (Connections)
+После входа в Airflow (порт 8080) необходимо настроить два подключения в меню Admin -> Connections:
+    1. bank_postgres (PostgreSQL):
+        ◦ Host: bank_postgres
+        ◦ Login: admin
+        ◦ Password: ваша_база
+        ◦ Port: 5432
+    2. aws_default (Amazon Web Services):
+        ◦ Login: Ваш_Access_Key
+        ◦ Password: Ваш_Secret_Key
+        ◦ Extra: {"region_name": "ca-central-1"}
+
+## Описание DAG
+ID: bank_load_customers_v1 Расписание: @hourly (каждый час)
+Этапы работы:
+    1. download_and_merge_step: Сканирует папку incoming/ в S3 бакете, скачивает все новые CSV файлы, объединяет их в один DataFrame и сохраняет локально.
+    2. upload_to_db_step: Читает объединенный файл, выполняет очистку типов данных и делает UPSERT (добавление новых или обновление существующих) записей в таблицу customers по ключу CustomerId.
+    3. Периодичность обновления 1 час.
+
+    
