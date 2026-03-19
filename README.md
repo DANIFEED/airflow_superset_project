@@ -347,20 +347,32 @@ docker exec -it bank_airflow_webserver airflow users create \
 ### Настройка подключений (Connections)
 После входа в Airflow (порт 8080) необходимо настроить два подключения в меню Admin -> Connections:
     1. bank_postgres (PostgreSQL):
+    
+    
         ◦ Host: bank_postgres
+        
         ◦ Login: admin
+        
         ◦ Password: ваша_база
+        
         ◦ Port: 5432
+        
     2. aws_default (Amazon Web Services):
+        
         ◦ Login: Ваш_Access_Key
+        
         ◦ Password: Ваш_Secret_Key
+        
         ◦ Extra: {"region_name": "ca-central-1"}
 
 ## Описание DAG
 ID: bank_load_customers_v1 Расписание: @hourly (каждый час)
 Этапы работы:
+
     1. download_and_merge_step: Сканирует папку incoming/ в S3 бакете, скачивает все новые CSV файлы, объединяет их в один DataFrame и сохраняет локально.
+
     2. upload_to_db_step: Читает объединенный файл, выполняет очистку типов данных и делает UPSERT (добавление новых или обновление существующих) записей в таблицу customers по ключу CustomerId.
+    
     3. Периодичность обновления 1 час.
 
     
