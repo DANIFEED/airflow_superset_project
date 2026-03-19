@@ -7,6 +7,7 @@ from datetime import datetime
 from airflow.decorators import dag, task
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+from airflow.operators.bash import BashOperator
 
 # Твои данные
 BUCKET_NAME = 'airflow-superset-bank-data-2026-342996267294-ca-central-1-an'
@@ -14,9 +15,10 @@ S3_PREFIX = 'incoming/'
 CONN_ID = 'bank_postgres'
 S3_CONN_ID = 'aws_default'
 MERGED_FILE_PATH = '/opt/airflow/data/merged_clients.csv'
+DASHBOARD_ID = 1  
 
 @dag(
-    dag_id='bank_load_customers_v1',
+    dag_id='bank_load_customers_v2',
     schedule_interval='@hourly',
     start_date=datetime(2026, 3, 19),
     catchup=False,
@@ -26,7 +28,7 @@ def bank_etl():
 
     @task
     def download_and_merge_step():
-        # Явно форсируем регион бакета ca-central-1
+
         s3_hook = S3Hook(aws_conn_id=S3_CONN_ID)
         
         try:
@@ -99,6 +101,21 @@ def bank_etl():
             if os.path.exists(file_path):
                 os.remove(file_path)
 
-    upload_to_db_step(download_and_merge_step())
+    # UPDATE SUPERSET
+    refresh_superset = BashOperator(
+        task_id='refresh_superset_cache',
+        bash_command="""
+            TOKEN=$(curl -s -X POST http://bank_superset:8088/api/v1/security/login \
+                -H "Content-Type: application/json" \
+                -d '{"username": "admin", "password": "admin", "provider": "db"}' \
+                | grep -oP '(?<="access_token":")[^"]*') && \
+            curl -s -I -X GET "http://bank_superset:8088/api/v1/dashboard/1" \
+                -H "Authorization: Bearer $TOKEN" || true
+        """
+    )
+
+
+    path = download_and_merge_step()
+    upload_to_db_step(path) >> refresh_superset
 
 bank_etl_dag = bank_etl()

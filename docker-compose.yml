@@ -1,4 +1,4 @@
-version: '3.8'
+
 
 services:
   # =============================================================================
@@ -73,6 +73,9 @@ services:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
+      - ./airflow/data:/opt/airflow/data
+      - ./airflow/scripts:/opt/airflow/scripts
+    
     ports:
       - "8080:8080"
     networks:
@@ -113,6 +116,8 @@ services:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
+      - ./airflow/data:/opt/airflow/data
+      - ./airflow/scripts:/opt/airflow/scripts
     networks:
       - bank_network
     user: "${AIRFLOW_UID:-50000}:0"
@@ -146,6 +151,8 @@ services:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
+      - ./airflow/data:/opt/airflow/data
+      - ./airflow/scripts:/opt/airflow/scripts
     networks:
       - bank_network
     user: "${AIRFLOW_UID:-50000}:0"
@@ -155,16 +162,16 @@ services:
   # Superset - Платформа для визуализации данных и дашбордов
   # =============================================================================
   superset:
-    image: apache/superset:latest
+    image: apache/superset:latest-dev
     container_name: bank_superset
     restart: always
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      SUPERSET__SQLALCHEMY_URI: postgresql+psycopg2://${DB_USER}:${DB_PASSWORD}@postgres:5432/superset_db
       SUPERSET_LOAD_EXAMPLES: 'no'
-      DATABASE_URL: postgresql+psycopg2://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
     volumes:
       - superset_home:/app/superset_home
     ports:
@@ -176,7 +183,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-    command: /bin/docker-entrypoint.sh runserver
+    
 
 # =============================================================================
 # Сети и тома
